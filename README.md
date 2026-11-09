@@ -32,16 +32,16 @@ El instalador crea `.venv`, instala las dependencias Python desde el índice de 
 | Terminal ADB | Comando remoto, sesión persistente por líneas sin PTY, favoritos, biblioteca y búsqueda en historial |
 | Aplicaciones APK | Inventario de usuario, sistema y deshabilitadas, instalación simple, lotes y splits, permisos, extracción, análisis externo y perfiles comparables |
 | Archivos Android | Navegación por rutas, detalle, vista previa, espacio libre, transferencias, creación, copia, movimiento y borrado de archivos o carpetas vacías |
-| Logcat | Vista en directo, prioridad, PID, etiqueta, expresión regular con límite de evaluación, pausa y exportación de consola |
+| Logcat | Vista en directo, prioridad, PID, etiqueta, expresión regular con límite de evaluación, pausa, guardado y comparación de sesiones |
 | Monitor | Muestras de memoria disponible y batería, gráfico temporal y exportación |
 | Pantalla y macros | PNG, grabación H.264, scrcpy, entrada de teclas/texto/toques/gestos, perfiles JSON/YAML y ejecución por paso |
 | Respaldos | Copias independientes, SHA-256, verificación, restauración, comparación y programación puntual |
 | Fastboot | Variables, reinicio y manifiesto local de imagen |
 | Particiones Fastboot | Flasheo de imágenes con cabecera reconocida y borrado, ambos con activación de sesión y confirmación escrita por serial y partición |
-| Red y depuración | Emparejar, conectar, desconectar, consultar IP, rutas, Wi-Fi y conectividad, guardar y olvidar destinos |
-| Ajustes Android | Leer system/secure/global y editar o restaurar un grupo de ajustes de pantalla en system |
+| Red y depuración | Emparejar, conectar, desconectar, consultar IP, rutas, Wi-Fi y conectividad, guardar y olvidar destinos, resolución DNS y prueba TCP de un destino |
+| Ajustes Android | Leer system/secure/global y editar o restaurar un grupo de ajustes de pantalla en system, perfiles y comparación |
 | Plugins locales | Importar manifiestos, activar, desactivar, eliminar y ejecutar acciones confirmadas |
-| Preferencias | Tema, rutas de ejecutables y lista adicional de paquetes protegidos |
+| Preferencias | Tema, rutas de ejecutables y lista adicional de paquetes protegidos y copia parcial de preferencias |
 
 La aplicación ejecuta una tarea de usuario a la vez. Usa **Cancelar tarea** para terminar el proceso local. Una operación ya iniciada en el dispositivo puede haber aplicado cambios parciales. Para cambiar de objetivo, verifica siempre el serial mostrado en el encabezado y en la confirmación.
 
@@ -69,7 +69,7 @@ La prueba física es de lectura y exige un serial autorizado explícito:
 ADB_STUDIO_TEST_SERIAL=MI_SERIAL .venv/bin/python -m pytest -m hardware
 ```
 
-Para compilar un ejecutable de escritorio con PyInstaller desde Linux:
+Para compilar un ejecutable de escritorio con PyInstaller desde Linux, instala también la biblioteca compartida de tu Python, por ejemplo `libpython3.13` si ese es el paquete de tu distribución:
 
 ```sh
 .venv/bin/python -m pip install -e '.[bundle]'
@@ -81,6 +81,6 @@ Distribuye la carpeta completa de `dist`. Compila en una distribución compatibl
 
 Para actualizar manualmente, respalda la carpeta de datos, verifica el origen y el hash de la distribución que vas a instalar y ejecuta su instalador. Para desinstalar, cierra la aplicación, retira el directorio del proyecto y borra el lanzador `applications/adb-ultimate-studio.desktop` y su icono `icons/hicolor/scalable/apps/adb-ultimate-studio.svg` en `${XDG_DATA_HOME:-~/.local/share}`. Borra la carpeta de datos solo si deseas eliminar historial y perfiles.
 
-La base de datos y los registros están en `${XDG_DATA_HOME:-~/.local/share}/adb-ultimate-studio`. Las órdenes y rutas pueden quedar en el historial. Evita introducir secretos en el shell o guardarlos en favoritos. El código de emparejamiento se envía por stdin. La aplicación usa archivos locales y procesos configurados por el usuario.
+La base de datos y los registros están en `${XDG_DATA_HOME:-~/.local/share}/adb-ultimate-studio`. Las órdenes guiadas y las rutas pueden quedar en el historial. El texto de comandos libres se guarda en SQLite solo al activar su casilla o guardarlo como favorito. Evita incluir secretos en órdenes, perfiles y exportaciones. El código de emparejamiento se envía por stdin. La aplicación usa archivos locales y procesos configurados por el usuario.
 
 Consulta [arquitectura y manifiesto](docs/arquitectura.md), [estado por función](docs/alcance.md) y [desarrollo de extensiones](docs/plugins.md).

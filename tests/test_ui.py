@@ -62,3 +62,20 @@ else:
     finally:
         window.close()
         app.processEvents()
+
+
+def test_partition_disabled_and_typed_confirmation(tmp_path):
+    import pytest
+
+    app = QApplication.instance() or QApplication([])
+    window = Window(Store(tmp_path / "studio.sqlite"))
+    try:
+        with pytest.raises(ValueError, match="Habilita"):
+            window.partition_target()
+        window.ask = lambda *_: "ERASE OTHER userdata"
+        assert not window.partition_confirm("TARGET", "ERASE", "userdata", "")
+        window.ask = lambda *_: "ERASE TARGET userdata"
+        assert window.partition_confirm("TARGET", "ERASE", "userdata", "")
+    finally:
+        window.close()
+        app.processEvents()

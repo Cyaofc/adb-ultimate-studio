@@ -63,6 +63,9 @@ def run(argv, cancel, emit=lambda channel, data: None, *, timeout=60,
                         if len(buffer) > capture_limit:
                             del buffer[:-capture_limit]
                         emit(stream, decoders[stream].decode(data))
+    except BaseException:
+        status = "error"
+        raise
     finally:
         if process.poll() is None or status != "finished":
             try:

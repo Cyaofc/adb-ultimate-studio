@@ -10,10 +10,12 @@ from .services import (
     backup, digest, input_args, load_macro, remote, token, verified_backup,
 )
 from .runner import Result
+from .partition import image_format
+from .profiles import Profiles
 from .scheduling import Scheduling
 
 
-class Advanced(Scheduling):
+class Advanced(Scheduling, Profiles):
     def screen_page(self):
         layout = self.page("Pantalla y macros", "Capturas, grabación, scrcpy, toques, gestos, teclas y secuencias JSON/YAML.")
         self.buttons(layout, ("Captura PNG", self.screenshot), ("Grabar pantalla", self.record_screen),
@@ -85,7 +87,8 @@ class Advanced(Scheduling):
         value = self.ask("Argumentos", examples[action])
         if value is not None:
             args = [value] if action == "text" else value.split()
-            self.shell(*input_args(action, args), risk="Enviar entrada a la pantalla activa.")
+            self.shell(*input_args(action, args), risk="Enviar entrada a la pantalla activa.",
+                       history="adb shell input text [texto privado]" if action == "text" else None)
 
     def macro_example(self):
         path = self.save("Guardar ejemplo JSON", "json")
@@ -147,7 +150,8 @@ class Advanced(Scheduling):
                         task.output.emit("event", "Paso omitido por condición\n")
                         continue
                 for attempt in range(step.get("retries", 0) + 1):
-                    result = task.command(cmd)
+                    history = "adb shell input text [texto privado]" if step["action"] == "text" else None
+                    result = task.command(cmd, history=history)
                     if result.ok or result.status == "cancelled":
                         break
                 if not result.ok:
@@ -262,11 +266,7 @@ class Advanced(Scheduling):
         def work(task):
             if not path.is_file() or path.stat().st_size == 0:
                 raise ValueError("La imagen debe ser un archivo regular no vacío")
-            with path.open("rb") as source:
-                header = source.read(16)
-            formats = ((b"ANDROID!", "cabecera Android boot"), (b"VNDRBOOT", "cabecera vendor boot"),
-                       (b"\x3a\xff\x26\xed", "cabecera Android sparse"), (b"AVB0", "cabecera AVB"))
-            kind = next((name for magic, name in formats if header.startswith(magic)), "desconocido")
+            kind = image_format(path)
             return {"archivo": str(path), "bytes": path.stat().st_size, "cabecera": kind,
                     "sha256": digest(path, task.cancel)}
         self.start(work, callback=lambda value: self.report(value) if isinstance(value, dict) else None)
@@ -276,6 +276,7 @@ class Advanced(Scheduling):
                            "La edición guiada se limita a ajustes de pantalla del espacio system.")
         self.buttons(layout, ("Listar espacio", self.list_settings), ("Leer ajuste", self.read_setting),
                      ("Cambiar ajuste permitido", self.change_setting), ("Restaurar cambio registrado", self.undo_setting))
+        self.buttons(layout, ("Perfiles de ajustes", self.settings_profile))
         layout.addStretch()
 
     def list_settings(self):
@@ -375,7 +376,7 @@ class Advanced(Scheduling):
         layout = self.page("Preferencias", "Configura rutas absolutas, aspecto y paquetes protegidos. "
                            "La simulación evita ejecutar procesos externos.")
         self.buttons(layout, ("Rutas de herramientas", self.override_tool), ("Tema", self.theme_choice),
-                     ("Paquetes protegidos", self.protected_packages))
+                     ("Paquetes protegidos", self.protected_packages), ("Copia de preferencias", self.local_preferences))
         layout.addStretch()
 
     def override_tool(self):

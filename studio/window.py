@@ -262,10 +262,10 @@ class Window(QMainWindow, Pages):
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                     QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
 
-    def execute(self, argv, device=None, *, risk=None, callback=None, timeout=60, display=None):
+    def execute(self, argv, device=None, *, risk=None, callback=None, timeout=60, display=None, history=None):
         if risk and not self.confirm(risk + "\n\n" + (display or shlex.join(argv)), device):
             return False
-        return self.start(lambda task: task.command(argv, timeout=timeout, display=display),
+        return self.start(lambda task: task.command(argv, timeout=timeout, display=display, history=history),
                           device, callback)
 
     def start(self, work, device=None, callback=None):

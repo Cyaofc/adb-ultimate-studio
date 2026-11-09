@@ -143,3 +143,44 @@ def test_failed_backup_does_not_publish_partial_files(tmp_path):
         return Result(1)
     assert not backup(tmp_path, "/x", fail, Event()).ok
     assert not list(tmp_path.iterdir())
+
+
+def test_plugin_import_only_parses_manifest(tmp_path):
+    import json
+
+    from studio.plugins import read_plugin
+
+    plugin = tmp_path / "example.json"
+    data = dict.fromkeys(("name", "version", "description", "compatibility", "permissions", "dependencies", "tests"), "x")
+    data["actions"] = {"diagnostic": ["id"]}
+    plugin.write_text(json.dumps(data))
+    assert read_plugin(plugin)["actions"]["diagnostic"] == ["id"]
+    data["actions"]["diagnostic"] = "id"
+    plugin.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        read_plugin(plugin)
+
+
+def test_log_compare(tmp_path):
+    from studio.log_sessions import compare_logs
+
+    before, after = tmp_path / "before.txt", tmp_path / "after.txt"
+    before.write_text("old\n")
+    after.write_text("new\n")
+    result = list(compare_logs(before, after))
+    assert "-old\n" in result and "+new\n" in result
+
+
+def test_sparse_image_size_check(tmp_path):
+    import struct
+
+    from studio.partition import expanded_size, image_format
+
+    path = tmp_path / "test.img"
+    header = struct.pack("<IHHHHIIII", 0xED26FF3A, 1, 0, 28, 12, 4096, 128, 1, 0)
+    path.write_bytes(header + bytes(36))
+    assert image_format(path) == "Android sparse"
+    assert expanded_size(path, "Android sparse") == 4096 * 128
+    path.write_bytes(header)
+    with pytest.raises(ValueError):
+        expanded_size(path, "Android sparse")

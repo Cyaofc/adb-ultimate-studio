@@ -73,7 +73,7 @@ def manifest(folder, cancel):
 def verified_backup(folder, cancel):
     metadata = folder / "manifest.json"
     data = folder / "data"
-    if metadata.is_symlink() or data.is_symlink() or not data.is_dir():
+    if not metadata.is_file() or metadata.is_symlink() or data.is_symlink() or not data.is_dir():
         raise ValueError("Estructura de respaldo no válida")
     if metadata.stat().st_size > 16 * 1024 * 1024:
         raise ValueError("Manifiesto demasiado grande")
@@ -87,6 +87,7 @@ def backup(parent, source, execute, cancel):
     folder = Path(tempfile.mkdtemp(prefix="adb-backup-", dir=parent))
     data = folder / "data"
     data.mkdir()
+    complete = False
     try:
         result = execute(data)
         if not result.ok or result.status == "simulated":
@@ -96,9 +97,10 @@ def backup(parent, source, execute, cancel):
             raise InterruptedError("Cancelado")
         (folder / "manifest.json").write_text(
             json.dumps({"source": source, "files": contents}, indent=2), encoding="utf-8")
+        complete = True
         return folder
     finally:
-        if not (folder / "manifest.json").is_file():
+        if not complete:
             shutil.rmtree(folder)
 
 

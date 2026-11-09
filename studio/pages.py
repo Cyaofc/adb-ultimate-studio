@@ -1,25 +1,27 @@
 """Paneles de dispositivos, terminal, diagnóstico y administración."""
+from collections import deque
 from pathlib import Path
-import json
 import os
 import re
 import shlex
 
 import regex as bounded_regex
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 
 from PySide6.QtWidgets import (
-    QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit,
+    QCheckBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit,
 )
 
 from .advanced import Advanced
 from .monitor import Monitor
 from .plugins import Plugins
 from .partition import Partition
+from .log_sessions import LogSessions
 from .services import INFO, apk_files, endpoint, packages, properties, remote, token
 
 
-class Pages(Advanced, Monitor, Plugins, Partition):
+class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
     def build_pages(self):
         for build in (self.device_page, self.terminal_page, self.apps_page, self.files_page,
                       self.log_page, self.monitor_page, self.screen_page, self.backup_page, self.fastboot_page, self.partition_page,
@@ -161,6 +163,8 @@ class Pages(Advanced, Monitor, Plugins, Partition):
         self.terminal.setPlaceholderText("id")
         self.terminal.setMaximumHeight(110)
         layout.addWidget(self.terminal)
+        self.audit_shell = QCheckBox("Guardar texto de comandos en historial local")
+        layout.addWidget(self.audit_shell)
         self.buttons(layout, ("Ejecutar una vez", self.shell_once), ("Abrir sesión", self.open_shell),
                      ("Enviar a sesión", self.send_shell), ("Cerrar sesión", self.close_shell))
         self.buttons(layout, ("Biblioteca", self.library), ("Guardar favorito", self.save_shell),
@@ -174,7 +178,8 @@ class Pages(Advanced, Monitor, Plugins, Partition):
             raise ValueError("Introduce un comando shell válido")
         device = self.target()
         self.execute(self.tools.adb(device, "shell", value), device,
-                     risk="El shell remoto puede modificar o borrar datos.")
+                     risk="El shell remoto puede modificar o borrar datos.",
+                     history=None if self.audit_shell.isChecked() else "adb shell [texto privado]")
 
     def open_shell(self):
         device = self.target()
@@ -212,13 +217,30 @@ class Pages(Advanced, Monitor, Plugins, Partition):
             self.append("event", f"{device.serial} $ {line}\n")
 
     def library(self):
-        name = self.choose("Biblioteca · consultas de lectura", INFO)
-        if name:
-            self.terminal.setPlainText(shlex.join(INFO[name]))
+        from .library import ENTRIES
+
+        category = self.choose("Categorías de la biblioteca", dict.fromkeys(entry.category for entry in ENTRIES))
+        if not category:
+            return
+        entries = {entry.name: entry for entry in ENTRIES if entry.category == category}
+        name = self.choose(category, entries)
+        if not name:
+            return
+        entry = entries[name]
+        prefix = {"shell": "adb -s SERIAL shell", "Fastboot": "fastboot -s SERIAL",
+                  "Dispositivos y sistema": "adb"}.get(entry.route, "adb -s SERIAL")
+        example = shlex.join(entry.args)
+        text = (f"{entry.name}\n\nEjemplo: {prefix} {example}\n"
+                f"Requisitos: {entry.requirements}\nCompatibilidad: {entry.compatibility}\nRiesgo: {entry.risk}")
+        if entry.route == "shell":
+            if self.confirm(text + "\n\nCargar en el editor de terminal"):
+                self.terminal.setPlainText(example)
+        else:
+            QMessageBox.information(self, "Biblioteca", text + f"\n\nPanel: {entry.route}")
 
     def save_shell(self):
         name = self.ask("Nombre del favorito")
-        if name:
+        if name and self.confirm("Guardar el texto del comando como favorito local. Revisa que no contenga secretos."):
             self.store.put("shell", name, self.terminal.toPlainText())
 
     def load_shell(self):
@@ -242,7 +264,22 @@ class Pages(Advanced, Monitor, Plugins, Partition):
         self.buttons(layout, ("Inventario", self.inventory), ("Instalar", self.install_apks),
                      ("Acciones de paquete", self.package_action), ("Extraer APK", self.extract_apks))
         self.buttons(layout, ("Guardar / comparar inventarios", self.inventory_profile),
-                     ("Analizar APK local", self.analyze_apk))
+                     ("Analizar APK local", self.analyze_apk), ("Favoritos", self.package_favorites))
+
+    def package_favorites(self):
+        action = self.choose("Paquetes favoritos", ("Guardar actual", "Cargar", "Quitar"))
+        if action == "Guardar actual":
+            package = token(self.package.text().strip())
+            self.store.put("package-favorite", package, package)
+        elif action:
+            choices = self.store.list("package-favorite")
+            if not choices:
+                raise ValueError("Todavía no hay paquetes favoritos")
+            package = self.choose("Paquete favorito", choices)
+            if package and action == "Cargar":
+                self.package.setText(package)
+            elif package:
+                self.store.delete("package-favorite", package)
 
     def inventory(self):
         options = {"Todos": (), "Usuario": ("-3",), "Sistema": ("-s",), "Deshabilitados": ("-d",)}
@@ -286,7 +323,8 @@ class Pages(Advanced, Monitor, Plugins, Partition):
             "Detener": ("am", "force-stop", name), "Borrar datos": ("pm", "clear", name),
             "Habilitar": ("pm", "enable", name), "Deshabilitar para usuario 0": ("pm", "disable-user", "--user", "0", name),
         }
-        action = self.choose("Acción del paquete", (*read, *mutate, "Desinstalar", "Conceder permiso", "Revocar permiso"))
+        action = self.choose("Acción del paquete", (*read, *mutate, "Reiniciar aplicación", "Desinstalar", "Desinstalar actualizaciones",
+                              "Borrar solo caché", "Conceder permiso", "Revocar permiso"))
         if action in read:
             self.shell(*read[action])
         elif action:
@@ -295,18 +333,45 @@ class Pages(Advanced, Monitor, Plugins, Partition):
                         "com.android.permissioncontroller", "com.google.android.permissioncontroller"}
             critical.update(self.store.get("config", "protected", []))
             if name in critical and action in ("Detener", "Borrar datos", "Deshabilitar para usuario 0",
-                                               "Desinstalar", "Revocar permiso"):
+                                               "Desinstalar", "Revocar permiso", "Reiniciar aplicación",
+                                               "Desinstalar actualizaciones", "Borrar solo caché"):
                 raise ValueError(f"Paquete protegido: {name}")
             risk = f"{action} en {name}. Cambiar paquetes del sistema puede afectar Android."
             if action == "Desinstalar":
                 self.execute(self.tools.adb(device, "uninstall", name), device, risk=risk)
             elif action in mutate:
                 self.shell(*mutate[action], risk=risk)
+            elif action in ("Reiniciar aplicación", "Desinstalar actualizaciones", "Borrar solo caché"):
+                self.extended_package_action(action, name, device, risk, mutate)
             else:
                 permission = self.ask("Permiso completo", "android.permission.")
                 if permission:
                     self.shell("pm", "grant" if action == "Conceder permiso" else "revoke",
                                name, token(permission), risk=risk)
+
+    def extended_package_action(self, action, name, device, risk, mutate):
+        if not self.confirm(risk, device):
+            return
+        if action == "Reiniciar aplicación":
+            commands = [self.tools.shell(device, *mutate[key]) for key in
+                        ("Detener", "Abrir actividad lanzadora")]
+            feature = None
+        else:
+            feature = "uninstall-system-updates" if action == "Desinstalar actualizaciones" else "--cache-only"
+            args = (feature, name) if feature == "uninstall-system-updates" else ("clear", feature, name)
+            commands = [self.tools.shell(device, "pm", *args)]
+
+        def work(task):
+            if feature and not task.dry:
+                help_result = task.command(self.tools.shell(device, "pm", "help"), visible=False)
+                if feature not in help_result.stdout + help_result.stderr:
+                    raise ValueError(f"El dispositivo no anuncia soporte para {feature}")
+            for command in commands:
+                result = task.command(command)
+                if not result.ok:
+                    break
+            return result
+        self.start(work, device)
 
     def inventory_profile(self):
         action = self.choose("Inventarios", ("Guardar perfil", "Comparar con perfil", "Exportar actual"))
@@ -389,7 +454,7 @@ class Pages(Advanced, Monitor, Plugins, Partition):
         self.buttons(layout, ("Detalle", lambda: self.shell("ls", "-la", "--", remote(self.path.text()))),
                      ("Espacio libre", lambda: self.shell("df", "-h", remote(self.path.text()))),
                      ("Vista previa", lambda: self.shell("head", "-c", "32768", "--", remote(self.path.text()))),
-                     ("Modificar", self.file_change))
+                     ("Modificar", self.file_change), ("Abrir descarga local", self.open_download))
 
     def list_path(self):
         path = remote(self.path.text())
@@ -423,8 +488,18 @@ class Pages(Advanced, Monitor, Plugins, Partition):
                         return task.command((*cmd, "<carpeta nueva>"))
                     return backup(parent, path, lambda data: task.command(
                         (*cmd, str(data)), timeout=1800), task.cancel)
-                self.start(work, device,
-                    lambda result: self.append("event", f"Descarga: {result}\n") if isinstance(result, Path) else None)
+                def done(result):
+                    if isinstance(result, Path):
+                        self.store.put("config", "local_download", str(result / "data"))
+                        self.append("event", f"Descarga: {result}\n")
+                self.start(work, device, done)
+
+    def open_download(self):
+        path = self.store.get("config", "local_download")
+        if not path or not Path(path).is_dir():
+            raise ValueError("No hay una carpeta de descarga local disponible")
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(path)):
+            raise ValueError("No fue posible abrir el gestor de archivos")
 
     def push(self):
         path = remote(self.path.text())
@@ -471,7 +546,8 @@ class Pages(Advanced, Monitor, Plugins, Partition):
         self.log_regex = self.field(layout, "Expresión regular opcional")
         self.log_paused = False
         self.buttons(layout, ("Iniciar Logcat", self.start_log),
-                     ("Pausar / reanudar", self.pause_log), ("Exportar", self.export_console))
+                     ("Pausar / reanudar", self.pause_log), ("Guardar sesión", self.save_log),
+                     ("Comparar sesiones", self.compare_log_sessions))
         layout.addStretch()
 
     def pause_log(self):
@@ -503,6 +579,7 @@ class Pages(Advanced, Monitor, Plugins, Partition):
         cmd = self.tools.adb(device, *args)
         pending = ""
         self.log_paused = False
+        session = deque(maxlen=5000)
         def filter_lines(data):
             nonlocal pending
             lines = (pending + data).split("\n")
@@ -520,9 +597,11 @@ class Pages(Advanced, Monitor, Plugins, Partition):
                 if match:
                     if "FATAL EXCEPTION" in line or "ANR in " in line:
                         self.append("event", "[Indicador Logcat] " + line + "\n")
-                    output.append(line)
+                    output.append(line[:4096])
+            session.extend(line + "\n" for line in output)
             return "".join(line + "\n" for line in output)
         if self.execute(cmd, device, timeout=None):
+            self.log_session = session
             self.sink_filter = filter_lines
 
     def network_page(self):
@@ -532,7 +611,7 @@ class Pages(Advanced, Monitor, Plugins, Partition):
         self.buttons(layout, ("Conectar", lambda: self.network("connect")),
                      ("Desconectar", lambda: self.network("disconnect")),
                      ("Emparejar", lambda: self.network("pair")),
-                     ("Perfiles conocidos", self.known_hosts))
+                     ("Perfiles conocidos", self.known_hosts), ("Diagnóstico del destino", self.network_probe))
         self.buttons(layout, ("IP", lambda: self.shell("ip", "addr")),
                      ("Rutas", lambda: self.shell("ip", "route")),
                      ("Wi-Fi", lambda: self.shell("dumpsys", "wifi")),
@@ -565,6 +644,20 @@ class Pages(Advanced, Monitor, Plugins, Partition):
                     self.store.put("hosts", address, address)
             self.execute(self.tools.host("adb", action, address),
                          risk=f"{action} {address}", callback=done)
+
+    def network_probe(self):
+        address = endpoint(self.address.text().strip())
+        action = self.choose("Diagnóstico local del destino", ("Resolución DNS", "Probar puerto TCP"))
+        if not action:
+            return
+        host, _, port = address.rpartition(":")
+        host = host.strip("[]")
+        if not self.confirm(f"{action} para {address}. Usa únicamente un destino autorizado."):
+            return
+        import sys
+        command = (sys.executable,) if getattr(sys, "frozen", False) else (sys.executable, "-m", "studio")
+        cmd = (*command, "--probe", "tcp" if action == "Probar puerto TCP" else "dns", host, port)
+        self.execute(cmd, timeout=8, display=f"{action} · {address}")
 
     def known_hosts(self):
         profiles = self.store.list("hosts")

@@ -15,3 +15,5 @@
 Las acciones construyen una orden con un objetivo inmutable antes de iniciar el trabajo. Las consultas del host se identifican como tales. El ejecutor usa un grupo de procesos Linux para cancelar y drenar las dos salidas. La UI recibe texto por señales y conserva un historial acotado de la consola. SQLite se abre por operación para que el hilo de la interfaz y el de ejecución tengan conexiones independientes.
 
 La capa de comandos distingue argumentos del proceso local y argumentos del shell Android. Las acciones guiadas citan los argumentos remotos. La terminal acepta una orden remota deliberadamente arbitraria tras una confirmación. Las extensiones agregan acciones mediante manifiestos JSON.
+
+`studio/library.py` define el catálogo de plantillas y paneles. `studio/log_sessions.py` gestiona el guardado y la comparación de sesiones. `studio/profiles.py` maneja inventarios de ajustes y copias parciales de preferencias. El inventario completo de rutas se encuentra en `docs/manifiesto.txt`.

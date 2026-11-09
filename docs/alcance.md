@@ -15,15 +15,14 @@ Los paneles y acciones de la tabla del README están conectados a procesos reale
 
 ## Pendiente
 
-- Aplicaciones. Desinstalar actualizaciones, borrar solo caché, identificar apps suspendidas, favoritos de paquetes, reinicio guiado y estimación de espacio por app.
-- Explorador. Fechas y tamaños en columnas, iconos por tipo, progreso porcentual y velocidad normalizados, y acceso directo a la carpeta local. La salida de las herramientas puede mostrar progreso de transferencia.
-- Terminal. PTY real y envío de Ctrl+C remoto, categorías con fichas completas para toda la biblioteca, variables parametrizadas y detección automática de requisitos. La sesión persistente acepta líneas y puede cerrarse con la cancelación local.
-- Logcat. Sesiones persistentes, comparación, filtros guardados y captura automática de contexto. La detección básica marca ANR y excepciones fatales.
+- Aplicaciones. Inventario de apps suspendidas y estimación de espacio por app. La disponibilidad de borrar caché o retirar actualizaciones se comprueba en la ayuda de `pm`.
+- Explorador. Fechas y tamaños en columnas, iconos por tipo, progreso porcentual y velocidad normalizados. La salida de las herramientas puede mostrar progreso de transferencia.
+- Terminal. PTY real y envío de Ctrl+C remoto, variables parametrizadas y detección automática de requisitos. La sesión persistente acepta líneas y puede cerrarse con la cancelación local.
+- Logcat. Filtros guardados y captura automática de contexto. La detección básica marca ANR y excepciones fatales.
 - Automatización. Programación persistente de macros, perfiles ligados al serial y editor visual de pasos.
-- Root y Fastboot. Perfiles de dispositivos modificados, análisis de boot image remota, validación exhaustiva de formatos y compatibilidad con particiones y favoritos específicos.
-- Respaldos. Restauración de preferencias de la aplicación desde la interfaz y programación con la aplicación cerrada.
-- Red. Diagnósticos activos de puerto y DNS y detección avanzada de conexiones duplicadas.
-- Ajustes. Perfiles transferibles y comparación entre dispositivos.
+- Root y Fastboot. Perfiles de dispositivos modificados, análisis de boot image remota, validación exhaustiva de formatos y matrices de compatibilidad por dispositivo y favoritos específicos.
+- Respaldos. Copia integral de base de datos desde la interfaz y programación con la aplicación cerrada. La copia guiada de preferencias comprende el tema, la última ruta y los paquetes protegidos adicionales.
+- Red. Detección avanzada de conexiones duplicadas.
 - Plugins. UI nativa personalizada y ejecución de pruebas del plugin desde el gestor.
 - Distribución. Instalador nativo DEB y actualizador integrado.
 
