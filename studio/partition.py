@@ -108,8 +108,6 @@ class Partition:
         command = self.tools.fastboot(device, "flash", partition)
         query = self.tools.fastboot(device, "getvar", f"partition-size:{partition}")
         def work(task):
-            if task.dry:
-                return task.command((*command, str(path)))
             check = task.command(query, timeout=10)
             if check.status in ("timeout", "cancelled"):
                 return check

@@ -42,12 +42,11 @@ else:
     window.show()
     try:
         until(app, lambda: window.selector.count() == 3 and not window.discovery)
-        assert window.dry.isChecked()
         assert window.selector.currentData() is None
-        window.dry.setChecked(False)
-        until(app, lambda: window.selector.count() == 3 and not window.discovery)
+        assert window.device_metrics["adb"].text() == "2"
         window.selector.setCurrentIndex(2)
         assert window.target().serial == "SECOND"
+        assert window.device_metrics["target"].text() == "Two · device"
         window.shell("id")
         until(app, lambda: not window.task)
         assert "uid=2000(shell)" in window.views["stdout"].toPlainText()

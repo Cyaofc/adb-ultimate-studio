@@ -26,8 +26,6 @@ class Advanced(Scheduling, Profiles):
 
     def binary_capture(self, path, argv, device, *, timeout, prefix):
         def work(task):
-            if task.dry:
-                return task.command(argv, timeout=timeout)
             with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
                 temp = Path(stream.name)
                 try:
@@ -146,7 +144,7 @@ class Advanced(Scheduling, Profiles):
                     check = task.command(self.tools.shell(device, "getprop", step["property"]), visible=False)
                     if not check.ok:
                         return check
-                    if not task.dry and check.stdout.strip() != step["equals"]:
+                    if check.stdout.strip() != step["equals"]:
                         task.output.emit("event", "Paso omitido por condición\n")
                         continue
                 for attempt in range(step.get("retries", 0) + 1):
@@ -156,7 +154,7 @@ class Advanced(Scheduling, Profiles):
                         break
                 if not result.ok:
                     return result
-                if not task.dry and task.cancel.wait(step.get("pause", 0)):
+                if task.cancel.wait(step.get("pause", 0)):
                     return Result(-1, status="cancelled")
             return result
         self.start(work, device)
@@ -184,8 +182,6 @@ class Advanced(Scheduling, Profiles):
     def start_backup(self, device, source, parent):
         cmd = self.tools.adb(device, "pull", source)
         def work(task):
-            if task.dry:
-                return task.command((*cmd, "<carpeta nueva>"))
             return backup(parent, source, lambda data: task.command(
                 (*cmd, str(data)), timeout=1800), task.cancel)
         def done(folder):
@@ -311,7 +307,7 @@ class Advanced(Scheduling, Profiles):
             return
         def work(task):
             result, before = self.setting_state(task, query, key)
-            if not result.ok or task.dry:
+            if not result.ok:
                 return result
             task.output.emit("event", f"Valor anterior: {before!r}\n")
             change = str(uuid.uuid4())
@@ -357,7 +353,7 @@ class Advanced(Scheduling, Profiles):
             return
         def work(task):
             result, current = self.setting_state(task, query, key)
-            if not result.ok or task.dry:
+            if not result.ok:
                 return result
             if current != record["after"]:
                 raise ValueError("El ajuste cambió desde la última escritura registrada")
@@ -373,8 +369,7 @@ class Advanced(Scheduling, Profiles):
         self.start(work, device)
 
     def tools_page(self):
-        layout = self.page("Preferencias", "Configura rutas absolutas, aspecto y paquetes protegidos. "
-                           "La simulación evita ejecutar procesos externos.")
+        layout = self.page("Preferencias", "Configura rutas absolutas, apariencia, paquetes protegidos y preferencias locales.")
         self.buttons(layout, ("Rutas de herramientas", self.override_tool), ("Tema", self.theme_choice),
                      ("Paquetes protegidos", self.protected_packages), ("Copia de preferencias", self.local_preferences))
         layout.addStretch()

@@ -29,6 +29,7 @@ studio/scheduling.py
 studio/services.py
 studio/store.py
 studio/tasks.py
+studio/theme.py
 studio/window.py
 tests/test_core.py
 tests/test_hardware.py

@@ -18,16 +18,14 @@ class Result:
 
     @property
     def ok(self):
-        return self.code == 0 and self.status in ("finished", "simulated")
+        return self.code == 0 and self.status == "finished"
 
 
 def run(argv, cancel, emit=lambda channel, data: None, *, timeout=60,
-        dry=False, sink=None, stdin=None, capture_limit=1024 * 1024):
+        sink=None, stdin=None, capture_limit=1024 * 1024):
     start = time.monotonic()
     if cancel.is_set():
         return Result(-1, status="cancelled")
-    if dry:
-        return Result(0, status="simulated")
     try:
         process = subprocess.Popen(argv, stdin=stdin or subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,

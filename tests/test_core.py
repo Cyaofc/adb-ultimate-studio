@@ -1,5 +1,4 @@
 from pathlib import Path
-import subprocess
 import sys
 from threading import Event, Timer
 
@@ -69,15 +68,13 @@ def test_cancellation():
     assert result.status == "cancelled" and result.duration < 3
 
 
-def test_dry_run_install(tmp_path, monkeypatch):
-    def unexpected(*args, **kwargs):
-        pytest.fail("Se inició un proceso en simulación")
-
-    monkeypatch.setattr(subprocess, "Popen", unexpected)
+def test_install_command_uses_explicit_serial(tmp_path, monkeypatch):
     apk = tmp_path / "sample.apk"
     apk.write_bytes(b"sample")
-    result = run(("/fake/adb", "-s", "serial", "install", *apk_files([apk])), Event(), dry=True)
-    assert result.ok and result.status == "simulated"
+    tools = Tools()
+    monkeypatch.setattr(tools, "locate", lambda _: "/fake/adb")
+    command = tools.adb(Device("adb", "serial", "device"), "install", *apk_files([apk]))
+    assert command == ("/fake/adb", "-s", "serial", "install", str(apk))
     with pytest.raises(ValueError):
         apk_files([tmp_path])
 

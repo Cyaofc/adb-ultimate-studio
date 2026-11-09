@@ -18,6 +18,12 @@ class Device:
         return f"{self.mode} · {self.serial} · {self.state} {self.details}".strip()
 
 
+    @property
+    def model(self):
+        return next((field.removeprefix("model:").replace("_", " ")
+                     for field in self.details.split() if field.startswith("model:")), "")
+
+
 def devices(mode: str, output: str) -> list[Device]:
     result = []
     for line in output.splitlines():

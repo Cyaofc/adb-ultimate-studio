@@ -79,8 +79,6 @@ class Monitor:
         battery = self.tools.shell(device, "dumpsys", "battery")
 
         def work(task):
-            if task.dry:
-                return task.command(memory)
             for _ in range(120):
                 results = [task.command(cmd, visible=False, audit=False, timeout=4) for cmd in (memory, battery)]
                 if task.cancel.is_set():

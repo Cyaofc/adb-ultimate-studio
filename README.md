@@ -1,6 +1,6 @@
 # ADB Ultimate Studio
 
-Aplicación de escritorio para Linux que administra dispositivos Android autorizados mediante ADB y Fastboot. Incluye simulación, selector explícito por serial y registro local en SQLite.
+Aplicación de escritorio para Linux que administra dispositivos Android autorizados mediante ADB y Fastboot. Incluye selector explícito por serial y registro local en SQLite.
 
 ## Instalar
 
@@ -19,10 +19,9 @@ El instalador crea `.venv`, instala las dependencias Python desde el índice de 
 
 ## Primer inicio
 
-1. Deja marcada **Simulación** para conocer los paneles. Los objetivos `SIMULACION-*` permiten revisar órdenes sin ejecutar programas externos.
-2. Para USB, activa las opciones de desarrollador y la depuración USB, conecta el dispositivo, desbloquéalo y acepta el aviso RSA. Quita **Simulación** y selecciona el serial correcto. Si aparece `no permissions`, aplica las reglas udev de tu distribución y verifica la pertenencia al grupo que esas reglas exigen. Reconecta el cable después de aplicar las reglas. [Configurar dispositivos físicos](https://developer.android.com/studio/run/device).
-3. Para Wi-Fi, en Android compatible usa **Depuración inalámbrica** y abre el diálogo de emparejamiento del teléfono. En **Red y depuración**, escribe el host y puerto de emparejamiento, selecciona **Emparejar** e introduce el código. Luego usa el host y puerto de conexión que muestra el dispositivo. [Depuración inalámbrica](https://developer.android.com/tools/adb#wireless).
-4. Usa **Ficha del dispositivo** para comprobar el destino. La consola inferior separa salida, errores y eventos.
+1. Para USB, activa las opciones de desarrollador y la depuración USB, conecta el dispositivo, desbloquéalo y acepta el aviso RSA. Selecciona el serial correcto en el encabezado. Si aparece `no permissions`, aplica las reglas udev de tu distribución y verifica la pertenencia al grupo que esas reglas exigen. Reconecta el cable después de aplicar las reglas. [Configurar dispositivos físicos](https://developer.android.com/studio/run/device).
+2. Para Wi-Fi, en Android compatible usa **Depuración inalámbrica** y abre el diálogo de emparejamiento del teléfono. En **Red y depuración**, escribe el host y puerto de emparejamiento, selecciona **Emparejar** e introduce el código. Luego usa el host y puerto de conexión que muestra el dispositivo. [Depuración inalámbrica](https://developer.android.com/tools/adb#wireless).
+3. Usa **Ficha del dispositivo** para comprobar el destino. La consola inferior separa salida, errores y eventos.
 
 ## Uso por panel
 

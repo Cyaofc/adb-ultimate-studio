@@ -12,8 +12,6 @@ class Scheduling:
         device = self.target()
         source = remote(self.backup_source.text())
         self.tools.adb(device, "get-state")
-        if self.dry.isChecked():
-            raise ValueError("Desactiva la simulación para programar un respaldo")
         parent = self.directory("Destino del respaldo programado")
         if not parent:
             return
@@ -41,9 +39,9 @@ class Scheduling:
         device = next((item for index in range(self.selector.count())
                        if (item := self.selector.itemData(index)) and item.mode == "adb"
                        and item.serial == serial and item.state == "device"), None)
-        if self.dry.isChecked() or self.task or not device:
+        if self.task or not device:
             self.append("event", f"Respaldo programado omitido · {value} · {serial}. "
-                                 "Comprueba el modo, las tareas activas y la conexión.\n")
+                                 "Comprueba las tareas activas y la conexión.\n")
             return
         self.guard(lambda: self.start_backup(device, source, parent))
 

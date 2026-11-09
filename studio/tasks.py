@@ -12,12 +12,11 @@ class Task(QThread):
     output = Signal(str, str)
     done = Signal(object)
 
-    def __init__(self, work, store, target, dry, parent=None):
+    def __init__(self, work, store, target, parent=None):
         super().__init__(parent)
         self.work = work
         self.store = store
         self.target = target
-        self.dry = dry
         self.cancel = Event()
 
     def command(self, argv, *, visible=True, audit=True, display=None, history=None, **kwargs):
@@ -25,7 +24,7 @@ class Task(QThread):
         if audit:
             self.output.emit("event", f"$ {label}\n")
         emit = self.output.emit if visible else lambda *_: None
-        result = run(argv, self.cancel, emit, dry=self.dry, **kwargs)
+        result = run(argv, self.cancel, emit, **kwargs)
         if audit:
             self.store.record(self.target, history or label, result)
         return result

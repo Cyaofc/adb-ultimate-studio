@@ -17,3 +17,5 @@ Las acciones construyen una orden con un objetivo inmutable antes de iniciar el 
 La capa de comandos distingue argumentos del proceso local y argumentos del shell Android. Las acciones guiadas citan los argumentos remotos. La terminal acepta una orden remota deliberadamente arbitraria tras una confirmación. Las extensiones agregan acciones mediante manifiestos JSON.
 
 `studio/library.py` define el catálogo de plantillas y paneles. `studio/log_sessions.py` gestiona el guardado y la comparación de sesiones. `studio/profiles.py` maneja inventarios de ajustes y copias parciales de preferencias. El inventario completo de rutas se encuentra en `docs/manifiesto.txt`.
+
+`studio/theme.py` define la paleta y los estilos de la ventana para los temas oscuro y claro.

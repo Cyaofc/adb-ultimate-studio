@@ -90,7 +90,7 @@ def backup(parent, source, execute, cancel):
     complete = False
     try:
         result = execute(data)
-        if not result.ok or result.status == "simulated":
+        if not result.ok:
             return result
         contents = manifest(data, cancel)
         if cancel.is_set():

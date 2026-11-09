@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 
 from PySide6.QtWidgets import (
-    QCheckBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit,
+    QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit, QVBoxLayout,
 )
 
 from .advanced import Advanced
@@ -36,8 +36,8 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
 
     def buttons(self, layout, *actions):
         row = QHBoxLayout()
-        for label, action in actions:
-            self.button(row, label, action)
+        for index, (label, action) in enumerate(actions):
+            self.button(row, label, action, primary=index == 0)
         layout.addLayout(row)
 
     def output_list(self, layout, callback):
@@ -60,9 +60,31 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
     def device_page(self):
         layout = self.page("Dispositivos y sistema", "USB y TCP/IP, batería, CPU, memoria, pantalla, sensores y diagnóstico. "
                            "Para USB, activa la depuración y acepta la clave RSA. Un estado «no permissions» requiere revisar udev.")
-        self.summary = QLabel("Selecciona un dispositivo ADB y consulta su ficha.")
+        cards = QHBoxLayout()
+        self.device_metrics = {}
+        for key, label, value in (("adb", "DISPOSITIVOS ADB", "—"),
+                                  ("fastboot", "DISPOSITIVOS FASTBOOT", "—"),
+                                  ("target", "OBJETIVO ACTIVO", "Sin seleccionar")):
+            card = QFrame(objectName="statusCard")
+            stack = QVBoxLayout(card)
+            stack.setContentsMargins(12, 9, 12, 9)
+            stack.addWidget(QLabel(label, objectName="eyebrow"))
+            metric = QLabel(value, objectName="metric")
+            metric.setTextFormat(Qt.TextFormat.PlainText)
+            metric.setWordWrap(True)
+            stack.addWidget(metric)
+            self.device_metrics[key] = metric
+            cards.addWidget(card, 2 if key == "target" else 1)
+        layout.addLayout(cards)
+        self.summary = QLabel("Selecciona un dispositivo ADB y consulta su ficha.", objectName="muted")
         self.summary.setWordWrap(True)
-        layout.addWidget(self.summary)
+        self.summary.setTextFormat(Qt.TextFormat.PlainText)
+        card = QFrame(objectName="statusCard")
+        overview = QVBoxLayout(card)
+        overview.setContentsMargins(12, 10, 12, 10)
+        overview.addWidget(QLabel("FICHA DEL DISPOSITIVO", objectName="eyebrow"))
+        overview.addWidget(self.summary)
+        layout.addWidget(card)
         self.buttons(layout, ("Ficha del dispositivo", self.snapshot),
                      ("Exportar ficha", lambda: self.report(self.snapshot_data()) ),
                      ("Consulta del sistema", self.info))
@@ -70,6 +92,15 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
                      ("Servidor ADB", self.server),
                      ("Diagnóstico root", self.root_check))
         layout.addStretch()
+
+    def show_target(self):
+        device = self.target()
+        if not device:
+            self.device_metrics["target"].setText("Sin seleccionar")
+            return
+        model = device.model or device.serial
+        self.device_metrics["target"].setText(f"{model} · {device.state}")
+        self.device_metrics["target"].setToolTip(device.label)
 
     def snapshot_data(self):
         snapshot = getattr(self, "last_snapshot", None)
@@ -85,7 +116,7 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
             results = {}
             for label, cmd in commands.items():
                 result = task.command(cmd, visible=False)
-                if result.status in ("simulated", "cancelled"):
+                if result.status == "cancelled":
                     return result
                 results[label] = {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
             return {"serial": device.serial, "consultas": results}
@@ -100,9 +131,14 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
                 "Codename": "ro.product.device", "Arquitectura": "ro.product.cpu.abi",
                 "Compilación": "ro.build.display.id", "Slot": "ro.boot.slot_suffix",
             }
-            self.summary.setTextFormat(Qt.TextFormat.PlainText)
+            battery = data["consultas"]["Batería y temperatura"]["stdout"]
+            level = re.search(r"^\s*level:\s*(\d+)\s*$", battery, re.M)
+            scale = re.search(r"^\s*scale:\s*(\d+)\s*$", battery, re.M)
+            charge = f"{100 * int(level[1]) / int(scale[1]):.0f} %" if level and scale and int(scale[1]) else "No disponible"
+            display = [f"{label} · {props.get(key) or 'No disponible'}" for label, key in labels.items()]
             self.summary.setText(device.serial + "\n" + "\n".join(
-                f"{label} · {props.get(key) or 'No disponible'}" for label, key in labels.items()))
+                "     |     ".join(display[index:index + 3]) for index in range(0, len(display), 3))
+                + f"\nBatería · {charge}")
             for label, result in data["consultas"].items():
                 if label != "Propiedades":
                     self.append("stdout", f"\n[{label}]\n{result['stdout']}")
@@ -184,8 +220,8 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
     def open_shell(self):
         device = self.target()
         cmd = self.tools.adb(device, "shell", "-T")
-        if self.task or self.dry.isChecked():
-            raise ValueError("La sesión requiere modo real y una consola libre")
+        if self.task:
+            raise ValueError("La sesión requiere una consola libre")
         read_fd, write_fd = os.pipe()
         reader = os.fdopen(read_fd, "rb", buffering=0)
         writer = os.fdopen(write_fd, "wb", buffering=0)
@@ -362,7 +398,7 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
             commands = [self.tools.shell(device, "pm", *args)]
 
         def work(task):
-            if feature and not task.dry:
+            if feature:
                 help_result = task.command(self.tools.shell(device, "pm", "help"), visible=False)
                 if feature not in help_result.stdout + help_result.stderr:
                     raise ValueError(f"El dispositivo no anuncia soporte para {feature}")
@@ -408,7 +444,7 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
         query = self.tools.shell(device, "pm", "path", name)
         def work(task):
             result = task.command(query)
-            if not result.ok or result.status == "simulated":
+            if not result.ok:
                 return result
             paths = packages(result.stdout)
             if not paths:
@@ -439,8 +475,6 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
                 import tempfile
                 executable = self.tools.locate(tool)
                 def work(task):
-                    if task.dry:
-                        return task.command((executable, "-d", "<destino temporal>", path))
                     folder = tempfile.mkdtemp(prefix="jadx-", dir=parent)
                     return task.command((executable, "-d", folder, path), timeout=600)
                 self.start(work)
@@ -484,8 +518,6 @@ class Pages(Advanced, Monitor, Plugins, Partition, LogSessions):
             cmd = self.tools.adb(device, "pull", path)
             if self.confirm(f"Descargar {path} a una carpeta nueva en {parent}", device):
                 def work(task):
-                    if task.dry:
-                        return task.command((*cmd, "<carpeta nueva>"))
                     return backup(parent, path, lambda data: task.command(
                         (*cmd, str(data)), timeout=1800), task.cancel)
                 def done(result):

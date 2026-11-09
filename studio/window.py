@@ -5,9 +5,9 @@ import json
 import shlex
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QPalette, QColor, QTextCursor
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
     QListWidget, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
     QScrollArea, QSplitter, QStackedWidget, QTabWidget, QVBoxLayout, QWidget,
 )
@@ -17,6 +17,7 @@ from .commands import Tools, devices
 from .pages import Pages
 from .runner import Result
 from .tasks import Task
+from .theme import apply
 
 
 class Window(QMainWindow, Pages):
@@ -26,50 +27,79 @@ class Window(QMainWindow, Pages):
         self.tools = Tools(store.get("config", "tools", {}))
         self.task = self.discovery = None
         self.adb_stopped = False
+        self.closing = False
         self.sink_filter = None
         self.setWindowTitle("ADB Ultimate Studio")
         self.resize(1130, 780)
-        root = QWidget()
+        root = QWidget(objectName="workspace")
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
-        header = QHBoxLayout()
-        layout.addLayout(header)
+        layout.setContentsMargins(14, 14, 14, 10)
+        layout.setSpacing(10)
+        banner = QFrame(objectName="header")
+        header = QHBoxLayout(banner)
+        header.setContentsMargins(14, 10, 14, 10)
+        layout.addWidget(banner)
+        mark = QLabel(">_", objectName="brandMark")
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark.setFixedSize(46, 46)
+        header.addWidget(mark)
+        branding = QVBoxLayout()
+        branding.setSpacing(1)
+        branding.addWidget(QLabel("ADB Ultimate Studio", objectName="brand"))
+        branding.addWidget(QLabel("Administración y diagnóstico de Android", objectName="muted"))
+        header.addLayout(branding)
+        header.addStretch(1)
+        target = QVBoxLayout()
+        target.setSpacing(2)
+        target.addWidget(QLabel("DISPOSITIVO OBJETIVO", objectName="eyebrow"))
         self.selector = QComboBox()
+        self.selector.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.selector.setMinimumContentsLength(30)
         self.selector.addItem("Selecciona un dispositivo")
-        header.addWidget(self.selector, 1)
-        self.refresh_button = self.button(header, "Actualizar", self.refresh)
-        self.dry = QCheckBox("Simulación")
-        self.dry.setChecked(store.get("config", "dry", True))
-        header.addWidget(self.dry)
-        self.dry.toggled.connect(self.change_mode)
+        target.addWidget(self.selector)
+        header.addLayout(target)
+        self.refresh_button = self.button(header, "Actualizar", self.refresh, primary=True)
         split = QSplitter(Qt.Orientation.Vertical)
+        split.setChildrenCollapsible(False)
+        split.setHandleWidth(7)
         layout.addWidget(split, 1)
         body = QWidget()
         row = QHBoxLayout(body)
-        rail = QVBoxLayout()
-        row.addLayout(rail)
+        row.setContentsMargins(0, 0, 0, 0)
+        rail_card = QFrame(objectName="rail")
+        rail_card.setFixedWidth(204)
+        rail = QVBoxLayout(rail_card)
+        rail.setContentsMargins(10, 12, 10, 8)
+        row.addWidget(rail_card)
+        rail.addWidget(QLabel("HERRAMIENTAS", objectName="eyebrow"))
         self.search = QLineEdit()
+        self.search.setClearButtonEnabled(True)
         self.search.setPlaceholderText("Buscar funciones")
         rail.addWidget(self.search)
-        self.nav = QListWidget()
-        self.nav.setFixedWidth(210)
+        self.nav = QListWidget(objectName="navigation")
         rail.addWidget(self.nav)
         self.stack = QStackedWidget()
         row.addWidget(self.stack, 1)
         split.addWidget(body)
         tabs = QTabWidget()
+        self.tabs = tabs
         self.views = {}
         for key, title in (("stdout", "Salida"), ("stderr", "Errores"), ("event", "Eventos")):
             view = QPlainTextEdit()
             view.setReadOnly(True)
+            view.setPlaceholderText({"stdout": "Aquí aparecerá la salida de las herramientas.",
+                                     "stderr": "Aquí se mostrarán los mensajes de error.",
+                                     "event": "Aquí aparecerá el registro de esta sesión."}[key])
+            view.setProperty("console", True)
             view.setMaximumBlockCount(5000)
             tabs.addTab(view, title)
             self.views[key] = view
         split.addWidget(tabs)
-        split.setSizes([515, 245])
+        split.setSizes([555, 170])
         bar = QHBoxLayout()
         layout.addLayout(bar)
-        self.state = QLabel("Listo")
+        self.state = QLabel("Buscando dispositivos…", objectName="status")
         bar.addWidget(self.state, 1)
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
@@ -83,6 +113,7 @@ class Window(QMainWindow, Pages):
         self.build_pages()
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.setCurrentRow(0)
+        self.selector.currentIndexChanged.connect(self.show_target)
         self.search.textChanged.connect(self.search_pages)
         self.apply_theme(store.get("config", "dark", True))
         self.timer = QTimer(self)
@@ -101,9 +132,12 @@ class Window(QMainWindow, Pages):
     def page(self, title, description):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        content = QWidget()
+        content = QWidget(objectName="panel")
         layout = QVBoxLayout(content)
-        label = QLabel(description)
+        layout.setContentsMargins(18, 14, 18, 18)
+        layout.setSpacing(9)
+        layout.addWidget(QLabel(title, objectName="panelTitle"))
+        label = QLabel(description, objectName="muted")
         label.setWordWrap(True)
         layout.addWidget(label)
         scroll.setWidget(content)
@@ -112,8 +146,10 @@ class Window(QMainWindow, Pages):
         self.sections.append((title + " " + description).casefold())
         return layout
 
-    def button(self, layout, label, callback):
+    def button(self, layout, label, callback, *, primary=False):
         button = QPushButton(label)
+        button.setProperty("primary", primary)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(button)
         button.clicked.connect(lambda: self.guard(callback))
         return button
@@ -176,42 +212,21 @@ class Window(QMainWindow, Pages):
                 cursor.setPosition(500_000, QTextCursor.MoveMode.KeepAnchor)
                 cursor.removeSelectedText()
 
-    def change_mode(self, dry):
-        self.selector.clear()
-        self.selector.addItem("Selecciona un dispositivo")
-        self.store.put("config", "dry", dry)
-        self.refresh()
-
     def apply_theme(self, dark):
-        if dark:
-            palette = QPalette()
-            for role, color in {
-                "Window": "#18202d", "WindowText": "#e4ebf5", "Base": "#101722",
-                "AlternateBase": "#202a3a", "Text": "#e4ebf5", "Button": "#253247",
-                "ButtonText": "#e4ebf5", "Highlight": "#24558b", "HighlightedText": "#ffffff",
-                "ToolTipBase": "#253247", "ToolTipText": "#ffffff",
-            }.items():
-                palette.setColor(getattr(QPalette.ColorRole, role), QColor(color))
-            self.setPalette(palette)
-        else:
-            self.setPalette(QPalette())
+        apply(self, dark)
         self.store.put("config", "dark", dark)
 
     def refresh(self):
-        if self.discovery or self.task:
+        if self.closing or self.discovery or self.task:
             return
-        dry = self.dry.isChecked()
         tools = self.tools
         adb_stopped = self.adb_stopped
         def scan(task):
             found, errors = [], []
             for name in ("adb", "fastboot"):
-                if name == "adb" and adb_stopped and not dry:
+                if name == "adb" and adb_stopped:
                     continue
                 try:
-                    if dry:
-                        tools.locate(name)
-                        continue
                     result = task.command(tools.host(name, "devices", *(("-l",) if name == "adb" else ())),
                                           timeout=4, visible=False, audit=False)
                     found.extend(devices(name, result.stdout))
@@ -219,9 +234,9 @@ class Window(QMainWindow, Pages):
                         errors.append(f"{name}: {result.stderr or result.status}")
                 except ValueError as exc:
                     errors.append(str(exc))
-            return found, errors, dry
+            return found, errors
 
-        self.discovery = Task(scan, self.store, "host", dry, self)
+        self.discovery = Task(scan, self.store, "host", self)
         self.discovery.done.connect(self.update_devices)
         self.discovery.finished.connect(self.clear_discovery)
         self.discovery.start()
@@ -234,23 +249,24 @@ class Window(QMainWindow, Pages):
         if isinstance(result, Result):
             self.state.setText(result.stderr or result.status)
             return
-        found, errors, dry = result
-        if dry != self.dry.isChecked():
-            QTimer.singleShot(100, self.refresh)
-            return
-        from .commands import Device
-        if dry:
-            found = [Device("adb", "SIMULACION-ADB", "device"),
-                     Device("fastboot", "SIMULACION-FASTBOOT", "fastboot")]
+        found, errors = result
+        self.device_metrics["adb"].setText(str(sum(d.mode == "adb" for d in found)))
+        self.device_metrics["fastboot"].setText(str(sum(d.mode == "fastboot" for d in found)))
         current = self.selector.currentData()
+        self.selector.blockSignals(True)
         self.selector.clear()
-        self.selector.addItem("Selecciona un dispositivo")
+        self.selector.addItem("Selecciona un dispositivo" if found else "Sin dispositivos detectados")
         for index, device in enumerate(found, 1):
-            self.selector.addItem(device.label, device)
+            title = f"{device.model or device.mode.upper()} · {device.serial}"
+            self.selector.addItem(title, device)
+            self.selector.setItemData(index, device.label, Qt.ItemDataRole.ToolTipRole)
             if current and (current.mode, current.serial) == (device.mode, device.serial):
                 self.selector.setCurrentIndex(index)
+        self.selector.blockSignals(False)
+        self.show_target()
         if not self.task:
-            self.state.setText(("Simulación · " if dry else "") + f"{len(found)} objetivo(s)")
+            count = len(found)
+            self.state.setText("1 dispositivo detectado" if count == 1 else f"{count} dispositivos detectados")
             self.state.setToolTip("\n".join(errors))
             if errors and errors != getattr(self, "last_scan_errors", None):
                 self.append("event", "\n".join(errors) + "\n")
@@ -272,12 +288,10 @@ class Window(QMainWindow, Pages):
         if self.task:
             raise ValueError("Ya hay una tarea activa. Finalízala o cancélala.")
         self.callback = callback
-        self.task = Task(work, self.store, device.serial if device else "host",
-                         self.dry.isChecked(), self)
+        self.task = Task(work, self.store, device.serial if device else "host", self)
         self.task.output.connect(self.append)
         self.task.done.connect(self.complete)
         self.task.finished.connect(self.clear_task)
-        self.dry.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.progress.show()
         self.state.setText(f"En ejecución · {self.task.target}")
@@ -288,7 +302,9 @@ class Window(QMainWindow, Pages):
         if isinstance(result, Result):
             label = {"finished": "Finalizada" if result.ok else "Error",
                      "cancelled": "Cancelada", "timeout": "Tiempo agotado",
-                     "simulated": "Simulada", "error": "Error"}[result.status]
+                     "error": "Error"}[result.status]
+            if not result.ok and result.status not in ("cancelled",):
+                self.tabs.setCurrentWidget(self.views["stderr"] if result.stderr else self.views["event"])
             if not result.ok and result.stderr:
                 self.append("event", result.stderr[-3000:] + "\n")
             self.append("event", f"{label} · código {result.code} · {result.duration:.2f} s\n")
@@ -304,7 +320,6 @@ class Window(QMainWindow, Pages):
         self.task.deleteLater()
         self.task = None
         self.cancel_button.setEnabled(False)
-        self.dry.setEnabled(True)
         self.progress.hide()
 
     def cancel_active(self):
@@ -318,6 +333,8 @@ class Window(QMainWindow, Pages):
                 if not task.wait(2000):
                     event.ignore()
                     return
+        self.closing = True
+        self.timer.stop()
         event.accept()
 
     def target(self):
