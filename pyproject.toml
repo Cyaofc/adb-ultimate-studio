@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adb-ultimate-studio"
+version = "0.1.0"
+description = "Suite de escritorio para dispositivos Android autorizados"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+readme = "README.md"
+dependencies = ["PySide6-Essentials>=6.8,<7", "PyYAML>=6,<7", "regex>=2024.11"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+bundle = ["pyinstaller>=6"]
+
+[project.gui-scripts]
+adb-ultimate-studio = "studio.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["studio*"]
+
+[tool.pytest.ini_options]
+markers = ["hardware: requiere un dispositivo autorizado y serial explícito"]

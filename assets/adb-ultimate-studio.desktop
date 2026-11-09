@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ADB Ultimate Studio
+Comment=Administración y diagnóstico de Android
+Exec=@EXEC@
+Icon=adb-ultimate-studio
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true
